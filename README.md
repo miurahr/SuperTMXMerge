@@ -1,5 +1,30 @@
+=============
 SuperTMXMerge
 =============
+
+This is a fork project.
+Please visit an original at https://github.com/amake/SuperTMXMerge
+
+Requirements
+------------
+
+- Java 11
+
+Download
+--------
+
+Here does not provide a desktop application package.
+We publish it as a library on OSSRH.
+
+License
+-------
+
+SuperTMXmerge is distributed under the [GNU Lesser General Public
+License, v2.1](http://www.gnu.org/licenses/lgpl-2.1.html).
+
+
+Original README
+=--============
 
 SuperTMXMerge is a tool for diffing and merging Translation Memory
 eXchange (TMX) files.

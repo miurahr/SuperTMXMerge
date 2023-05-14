@@ -1,36 +1,39 @@
 plugins {
     id 'com.github.johnrengelman.shadow' version '5.2.0'
-    id 'application'
+    id 'java-library'
     id 'maven-publish'
     id 'signing'
     id 'eclipse'
+    id "com.palantir.git-version" version "0.13.0"
+    id "io.github.gradle-nexus.publish-plugin" version "1.1.0"
 }
 
-applicationName = 'SuperTMXMerge'
-mainClassName = 'org.madlonkay.supertmxmerge.Main'
+group = 'tokyo.northside'
 
-def getGitVersion = {
-    if (!file('.git').directory) {
-        return 'unknown'
+if (versionDetails().isCleanTag) {
+    // drop first 'v' from version tag
+    version = gitVersion().substring(1)
+} else {
+    version = versionDetails().lastTag.substring(1) + '-' + versionDetails().commitDistance + '-' + versionDetails().gitHash + '-SNAPSHOT'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+//        vendor = JvmVendorSpec.ADOPTIUM
     }
-    StringBuilder output = new StringBuilder()
-    'git describe --tags --always HEAD'.execute().waitForProcessOutput(output, null)
-    return output.toString().trim()
+    withSourcesJar()
+    withJavadocJar()
 }
-
-version = getGitVersion()
-
-sourceCompatibility = '1.8'
-targetCompatibility = '1.8'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    compile 'org.jdesktop:beansbinding:1.2.1'
-    compile 'com.googlecode.java-diff-utils:diffutils:1.2.1'
-    testCompile 'junit:junit:4.12'
+    implementation 'org.jdesktop:beansbinding:1.2.1'
+    implementation 'com.googlecode.java-diff-utils:diffutils:1.2.1'
+    testImplementation 'junit:junit:4.13.1'
 }
 
 sourceSets {
@@ -54,106 +57,38 @@ task genJAXB(type: Exec) {
 }
 compileJava.source genJAXB.outputs.files, sourceSets.main.java
 
-task macApp {
-    description = 'Generate the Mac .app skeleton. Requires AppBundler (https://bitbucket.org/infinitekind/appbundler) ' +
-        'to be available in ~/.ant/lib'
-    def appbundlerJar = file("${System.getProperty('user.home')}/.ant/lib/appbundler-1.0ea.jar")
-    onlyIf {
-        appbundlerJar.file
-    }
-    def outputDir = file("${buildDir}/mac")
-    outputs.dir outputDir
-    doLast {
-        delete outputDir
-        outputDir.mkdirs()
-        ant.taskdef(name: 'appbundler', classname: 'com.oracle.appbundler.AppBundlerTask',
-            classpath: appbundlerJar)
-        ant.appbundler(outputdirectory: outputDir.path,
-            name: applicationName,
-            displayname: applicationName,
-            identifier: "org.madlonkay.${applicationName}",
-            version: version,
-            jvmrequired: targetCompatibility,
-            shortversion: '${version}',
-            mainclassname: mainClassName) {
-            option(value: "-Xdock:name=${applicationName}")
-        }
-    }
-}
-
-distributions {
-    main {
-        contents {
-            from('.') {
-                include '*.md', 'LICENSE'
-            }
-        }
-    }
-    mac {
-        contents {
-            from macApp.outputs
-            into("${applicationName}.app/Contents/Java") {
-                from jar, configurations.runtime
-            }
-            from('.') {
-                include '*.md', 'LICENSE'
-            }
-        }
-    }
-}
-
-task debug(dependsOn: classes, type: JavaExec) {
-    description = 'Launch app for debugging.' // Special debug task for NetBeans
-    main = mainClassName
-    classpath = sourceSets.main.runtimeClasspath
-    debug true
-}
-
-task sourceJar(type: Jar) {
-    from sourceSets.main.allJava
-    exclude 'org/omegat/**'
-    archiveClassifier = 'sources'
-}
-
 javadoc {
     failOnError = false
     exclude 'org/omegat/**'
+    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:none", true)
+    (options as StandardJavadocDocletOptions).addStringOption("Xmaxwarns", "1")
 }
 
-task javadocJar(type: Jar) {
-    from javadoc.outputs
-    archiveClassifier = 'javadoc'
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
+    options.compilerArgs.addAll '-Xlint', '-Werror'
 }
 
-ext {
-    def propsFile = file('local.properties')
-    if (propsFile.file) {
-        def props = new Properties()
-        propsFile.withInputStream { props.load(it) }
-        props.each { k, v -> set(k, v) }
-    } else {
-        logger.log(LogLevel.WARN, "$propsFile not found")
-    }
+sourcesJar {
+    exclude 'org/omegat/**'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 publishing {
     publications {
         mavenJava(MavenPublication) { publication ->
-            groupId = 'org.madlonkay'
+            groupId = 'tokyo.northside'
             artifactId = 'supertmxmerge'
-            artifact sourceJar
-            artifact javadocJar
-
             from components.java
 
             pom {
                 name = 'SuperTMXMerge'
-                description = 'A graphical diff & merge tool for TMX files'
-                url = 'https://github.com/amake/SuperTMXMerge'
+                description = 'A diff & merge library for TMX files'
+                url = 'https://github.com/miurahr/SuperTMXMerge'
                 scm {
-                    connection = 'scm:git:https://github.com/amake/SuperTMXMerge'
-                    developerConnection = 'scm:git:https://github.com/amake/SuperTMXMerge'
-                    url = 'https://github.com/amake/SuperTMXMerge.git'
+                    connection = 'scm:git:https://github.com/miurahr/SuperTMXMerge'
+                    developerConnection = 'scm:git:https://github.com/miurahr/SuperTMXMerge'
+                    url = 'https://github.com/miurahr/SuperTMXMerge.git'
                 }
                 licenses {
                     license {
@@ -167,21 +102,38 @@ publishing {
                         name = 'Aaron Madlon-Kay'
                         email = 'aaron@madlon-kay.com'
                     }
+                    developer {
+                        id = 'miurahr'
+                        name = 'Hiroshi Miura'
+                        email = 'miurahr@linux.com'
+                    }
                 }
-            }
-        }
-    }
-    repositories {
-        maven {
-            url = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
-            credentials(PasswordCredentials) {
-                username rootProject.findProperty('ossrhUsername')
-                password rootProject.findProperty('ossrhPassword')
             }
         }
     }
 }
 
+nexusPublishing {
+    repositories {
+        sonatype {
+            username = project.hasProperty('sonatypeUsername') ? project.property('sonatypeUsername') : System.getenv('SONATYPE_USER')
+            password = project.hasProperty('sonatypePassword') ? project.property('sonatypePassword') : System.getenv('SONATYPE_PASS')
+        }
+    }
+}
+
 signing {
+    if (project.hasProperty("signingKey")) {
+        def signingKey = findProperty("signingKey").toString()
+        def signingPassword = findProperty("signingPassword").toString()
+        useInMemoryPgpKeys(signingKey, signingPassword)
+    } else {
+        useGpgCmd()
+    }
     sign publishing.publications.mavenJava
+}
+
+tasks.withType(Sign) {
+    def hasKey = project.hasProperty("signingKey") || project.hasProperty("signing.gnupg.keyName")
+    onlyIf { hasKey && versionDetails().isCleanTag }
 }
